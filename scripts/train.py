@@ -47,8 +47,8 @@ from scripts.train_utils import *
 torch.backends.cudnn.benchmark = True
 
 # for clevr, change to './datasets/clevr/target'
-DATA_DIR = os.path.expanduser('./datasets/vg')
-
+# DATA_DIR = os.path.expanduser('./datasets/vg')
+DATA_DIR = '/media/azadef/MyHDD/Data/CLEVR_SIMSG/target'
 
 def argument_parser():
   # helps parsing the same arguments in a different script
