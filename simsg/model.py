@@ -52,7 +52,9 @@ class SIMSGModel(nn.Module):
                  mask_size=None, mlp_normalization='none', layout_noise_dim=0,
                  img_feats_branch=True, feat_dims=128, is_baseline=False, is_supervised=False,
                  feats_in_gcn=False, feats_out_gcn=True, layout_pooling="sum",
-                 spade_blocks=False, feats_extractor='vgg', **kwargs):
+                 spade_blocks=False, feats_extractor='vgg',
+                 caps_noise_size=100, caps_noise_source='input', caps_dropout=0.5,
+                 caps_nonlinearity='squash', caps_dynamic_routing='local', caps_batch_norm=False, caps_cuda=True, **kwargs):
 
         super(SIMSGModel, self).__init__()
 
@@ -143,7 +145,8 @@ class SIMSGModel(nn.Module):
                 nn.BatchNorm2d(layout_noise_dim),
                 nn.ReLU()
             )
-            # self.capsnet_encoder = Capsnet_Encoder(None) #TODO
+            self.capsnet_encoder = Capsnet_Encoder(image_size, caps_noise_size, caps_noise_source, caps_dropout,
+                                                   caps_nonlinearity, caps_dynamic_routing, caps_batch_norm, caps_cuda)
 
         if not (self.is_baseline or self.is_supervised):
             self.high_level_feats = self.build_obj_feats_net(feats_extractor)

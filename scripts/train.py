@@ -50,6 +50,7 @@ torch.backends.cudnn.benchmark = True
 # DATA_DIR = os.path.expanduser('./datasets/vg')
 DATA_DIR = '/media/azadef/MyHDD/Data/CLEVR_SIMSG/target'
 
+
 def argument_parser():
   # helps parsing the same arguments in a different script
   parser = argparse.ArgumentParser()
@@ -121,6 +122,24 @@ def argument_parser():
       default='C4-64-2,C4-128-2,C4-256-2')
   parser.add_argument('--d_img_weight', default=1.0, type=float) # multiplied by d_loss_weight
 
+  #Capsule Network
+  parser.add_argument('--noise_source', type=str, default='input',
+                     # options: input, broadcast, dropout, broadcast_conv, broadcast_latent
+                     help='noise source (default=input)')
+  parser.add_argument('--noise_size', type=int, default=100,
+                     # this value needs to be divisible by image size for input = 'broadcast' or broadcast_latent
+                     help='Batch size (default=128)')
+  parser.add_argument('--drop_out', type=float, default=0.5,
+                     help='drop_out (default=0.0)')
+  parser.add_argument('--caps_nonlinearity', type=str, default='sqaush',  # options: sqaush
+                     help='Capsule network nonlinearity (default=sqaush)')
+  parser.add_argument('--dynamic_routing', type=str, default='local',  # options: local
+                     help=' local dynamic routing')
+  parser.add_argument('--batch_norm', type=bool, default=False
+                     , help='whether to batch_norm out in training')
+  parser.add_argument('--cuda', type=bool, default=True
+                      , help='whether to use cuda')
+
   # Output options
   parser.add_argument('--print_every', default=500, type=int)
   parser.add_argument('--timing', default=False, type=bool_flag)
@@ -177,7 +196,14 @@ def build_model(args, vocab):
       'is_baseline': args.is_baseline,
       'is_supervised': args.is_supervised,
       'spade_blocks': args.spade_gen_blocks,
-      'layout_pooling': args.layout_pooling
+      'layout_pooling': args.layout_pooling,
+      'caps_noise_size': args.noise_size,
+      'caps_noise_source': args.noise_source,
+      'caps_dropout': args.dropout,
+      'caps_nonlinearity': args.caps_nonlinearity,
+      'caps_dynamic_routing': args.dynamic_routing,
+      'caps_batch_norm': args.batch_norm,
+      'caps_cuda': args.cuda,
     }
 
     model = SIMSGModel(**kwargs)

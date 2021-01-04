@@ -1,6 +1,7 @@
 from __future__ import print_function
 import torch.nn.parallel
 import torch.utils.data
+import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,18 +10,17 @@ from simsg.capsule import *
 import numpy as np
 
 
-
 class Encoder(nn.Module):
-    def __init__(self, args):
+    def __init__(self, image_size, noise_size, noise_source, dropout, caps_nonlinearity, dynamic_routing, batch_norm, cuda):
         super(Encoder, self).__init__()
         self.ch = 16
-        self.dropout = nn.Dropout2d(p=args['drop_out'])
+        self.dropout = nn.Dropout2d(p=dropout)
         self.leakyrelu = nn.LeakyReLU()
-        if args['noise_source'] == 'input':
-            self.fc = nn.Linear(args['noise_size'], args['image_size']*args['image_size'])
-        if args['noise_source'] == 'broadcast_conv':
-            self.conv_noise = nn.Conv2d(in_channels=args['noise_size'], out_channels=1, kernel_size=5, padding=2, stride=1)
-        if (args['noise_source'] == 'dropout') or (args['noise_source'] == 'broadcast_latent'):
+        if noise_source == 'input':
+            self.fc = nn.Linear(noise_size, image_size[0]*image_size[1])
+        if noise_source == 'broadcast_conv':
+            self.conv_noise = nn.Conv2d(in_channels=noise_size, out_channels=1, kernel_size=5, padding=2, stride=1)
+        if (noise_source == 'dropout') or (noise_source == 'broadcast_latent'):
             # in_channels=1->3
             self.conv1 = nn.Conv2d(in_channels=3, out_channels=self.ch, kernel_size=5, padding=2, stride=1)
         else:
@@ -30,24 +30,24 @@ class Encoder(nn.Module):
 
         self.convcaps1 = convolutionalCapsule(in_capsules=1, out_capsules=2, in_channels=self.ch, out_channels=self.ch,
                                               stride=2, padding=2, kernel=5,
-                                              nonlinearity=args['caps_nonlinearity'], batch_norm=args['batch_norm'],
-                                              dynamic_routing=args['dynamic_routing'], cuda=args['cuda'])
+                                              nonlinearity=caps_nonlinearity, batch_norm=batch_norm,
+                                              dynamic_routing=dynamic_routing, cuda=cuda)
         self.convcaps2 = convolutionalCapsule(in_capsules=2, out_capsules=4, in_channels=self.ch, out_channels=self.ch,
                                               stride=1, padding=2, kernel=5,
-                                              nonlinearity=args['caps_nonlinearity'], batch_norm=args['batch_norm'],
-                                              dynamic_routing=args['dynamic_routing'], cuda=args['cuda'])
+                                              nonlinearity=caps_nonlinearity, batch_norm=batch_norm,
+                                              dynamic_routing=dynamic_routing, cuda=cuda)
         self.convcaps3 = convolutionalCapsule(in_capsules=4, out_capsules=4, in_channels=self.ch, out_channels=self.ch * 2,
                                               stride=2, padding=2, kernel=5,
-                                              nonlinearity=args['caps_nonlinearity'], batch_norm=args['batch_norm'],
-                                              dynamic_routing=args['dynamic_routing'], cuda=args['cuda'])
+                                              nonlinearity=caps_nonlinearity, batch_norm=batch_norm,
+                                              dynamic_routing=dynamic_routing, cuda=cuda)
         self.convcaps4 = convolutionalCapsule(in_capsules=4, out_capsules=8, in_channels=self.ch * 2, out_channels=self.ch * 2,
                                               stride=1, padding=2, kernel=5,
-                                              nonlinearity=args['caps_nonlinearity'], batch_norm=args['batch_norm'],
-                                              dynamic_routing=args['dynamic_routing'], cuda=args['cuda'])
+                                              nonlinearity=caps_nonlinearity, batch_norm=batch_norm,
+                                              dynamic_routing=dynamic_routing, cuda=cuda)
         self.convcaps5   = convolutionalCapsule(in_capsules=8, out_capsules=8, in_channels=self.ch * 2, out_channels=self.ch * 4,
                                               stride=2, padding=2, kernel=5,
-                                              nonlinearity=args['caps_nonlinearity'], batch_norm=args['batch_norm'],
-                                              dynamic_routing=args['dynamic_routing'], cuda=args['cuda'])
+                                              nonlinearity=caps_nonlinearity, batch_norm=batch_norm,
+                                              dynamic_routing=dynamic_routing, cuda=cuda)
 
     def forward(self, x, noise, args):
         batch_size = x.size(0)
