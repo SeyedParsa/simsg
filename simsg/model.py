@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -23,6 +24,8 @@ from simsg.graph import GraphTripleConv, GraphTripleConvNet
 from simsg.decoder import DecoderNetwork
 from simsg.layout import boxes_to_layout, masks_to_layout
 from simsg.layers import build_mlp
+from simsg.capsnet import Encoder as Capsnet_Encoder
+from simsg.capsnet import Decoder as Capsnet_Decoder
 
 import random
 import torchvision as T
@@ -49,7 +52,7 @@ class SIMSGModel(nn.Module):
                  mask_size=None, mlp_normalization='none', layout_noise_dim=0,
                  img_feats_branch=True, feat_dims=128, is_baseline=False, is_supervised=False,
                  feats_in_gcn=False, feats_out_gcn=True, layout_pooling="sum",
-                 spade_blocks=False, **kwargs):
+                 spade_blocks=False, feats_extractor='vgg', **kwargs):
 
         super(SIMSGModel, self).__init__()
 
@@ -140,14 +143,15 @@ class SIMSGModel(nn.Module):
                 nn.BatchNorm2d(layout_noise_dim),
                 nn.ReLU()
             )
+            # self.capsnet_encoder = Capsnet_Encoder(None) #TODO
 
         if not (self.is_baseline or self.is_supervised):
-            self.high_level_feats = self.build_obj_feats_net()
+            self.high_level_feats = self.build_obj_feats_net(feats_extractor)
             # freeze vgg
             for param in self.high_level_feats.parameters():
                 param.requires_grad = False
 
-            self.high_level_feats_fc = self.build_obj_feats_fc(feat_dims)
+            self.high_level_feats_fc = self.build_obj_feats_fc(feat_dims, feats_extractor)
 
             if self.feats_in_gcn:
                 self.layer_norm = nn.LayerNorm(normalized_shape=embedding_dim + 4 + feat_dims)
@@ -160,18 +164,26 @@ class SIMSGModel(nn.Module):
         self.p = 0.25
         self.p_box = 0.35
 
-    def build_obj_feats_net(self):
-        # get VGG16 features for each object RoI
-        vgg_net = T.models.vgg16(pretrained=True)
-        layers = list(vgg_net.features._modules.values())[:-1]
+    def build_obj_feats_net(self, feats_extractor):
+        if feats_extractor == 'vgg':
+            # get VGG16 features for each object RoI
+            vgg_net = T.models.vgg16(pretrained=True)
+            layers = list(vgg_net.features._modules.values())[:-1]
 
-        img_feats = nn.Sequential(*layers)
+            img_feats = nn.Sequential(*layers)
+            return img_feats
+        else:
+            # Trained
+            caps_net_encoder = Capsnet_Encoder
+            return caps_net_encoder
 
-        return img_feats
-
-    def build_obj_feats_fc(self, feat_dims):
-        # fc layer following the VGG16 backbone
-        return nn.Linear(512 * int(self.image_size[0] / 64) * int(self.image_size[1] / 64), feat_dims)
+    def build_obj_feats_fc(self, feat_dims, feats_extractor):
+        if feats_extractor == 'vgg':
+            # fc layer following the VGG16 backbone
+            return nn.Linear(512 * int(self.image_size[0] / 64) * int(self.image_size[1] / 64), feat_dims)
+        else:
+            # TODO
+            pass
 
     def _build_mask_net(self, dim, mask_size):
         # mask prediction network
@@ -243,13 +255,16 @@ class SIMSGModel(nn.Module):
             boxes_prior = boxes_gt * box_keep
 
             obj_crop = get_cropped_objs(in_image, boxes_gt, obj_to_img, feats_keep, box_keep, evaluating, mode)
-
+            # print(obj_crop.shape)
             high_feats = self.high_level_feats(obj_crop)
 
             high_feats = high_feats.view(high_feats.size(0), -1)
             high_feats = self.high_level_feats_fc(high_feats)
+            print(high_feats.shape)
+            # exit(0)
 
             feats_prior = high_feats * feats_keep
+            print('feats_prior shape: ', feats_prior.shape)
 
             if evaluating and random_feats:
                 # fill with noise the high level visual features, if the feature is masked/dropped
@@ -272,12 +287,19 @@ class SIMSGModel(nn.Module):
 
         # GCN pass
         if isinstance(self.gconv, nn.Linear):
+            print('one')
             obj_vecs = self.gconv(obj_vecs)
         else:
+            print('two')
             obj_vecs, pred_vecs = self.gconv(obj_vecs, pred_vecs, edges)
         if self.gconv_net is not None:
+            print('three')
             obj_vecs, pred_vecs = self.gconv_net(obj_vecs, pred_vecs, edges)
 
+        # TODOap: here I should get the latent output of capspix2pix which consists of 8 capsules with dim=8, I should concat it with
+
+        print('obj_vecs shape: ', obj_vecs.shape)
+        print('pred_ves shape: ', pred_vecs.shape)
         # Box prediction network
         boxes_pred = self.box_net(obj_vecs)
 
@@ -366,9 +388,11 @@ class SIMSGModel(nn.Module):
 
             in_image[:, :3, :, :] = layout_noise * in_image[:, 3:4, :, :] + in_image[:, :3, :, :] * (
                         1 - in_image[:, 3:4, :, :])
-            img_feats = self.conv_img(in_image)
+            # img_feats = self.conv_img(in_image)
+            # TODO: capsule
+            # img_feats = self.capsnet_encoder(in_image, None, None)
 
-            layout = torch.cat([layout, img_feats], dim=1)
+            # layout = torch.cat([layout, img_feats], dim=1)
 
         elif self.layout_noise_dim > 0:
             N, C, H, W = layout.size()
@@ -381,6 +405,7 @@ class SIMSGModel(nn.Module):
 
             layout = torch.cat([layout, layout_noise], dim=1)
 
+        # TODO: capsule
         img = self.decoder_net(layout)
 
         # visualize layout for debugging purposes
