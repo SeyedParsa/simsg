@@ -199,7 +199,7 @@ def build_model(args, vocab):
       'layout_pooling': args.layout_pooling,
       'caps_noise_size': args.noise_size,
       'caps_noise_source': args.noise_source,
-      'caps_dropout': args.dropout,
+      'caps_dropout': args.drop_out,
       'caps_nonlinearity': args.caps_nonlinearity,
       'caps_dynamic_routing': args.dynamic_routing,
       'caps_batch_norm': args.batch_norm,
