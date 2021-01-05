@@ -391,11 +391,11 @@ class SIMSGModel(nn.Module):
 
             in_image[:, :3, :, :] = layout_noise * in_image[:, 3:4, :, :] + in_image[:, :3, :, :] * (
                         1 - in_image[:, 3:4, :, :])
-            # img_feats = self.conv_img(in_image)
+            img_feats = self.conv_img(in_image)
             # TODO: capsule
             # img_feats = self.capsnet_encoder(in_image, None, None)
 
-            # layout = torch.cat([layout, img_feats], dim=1)
+            layout = torch.cat([layout, img_feats], dim=1)
 
         elif self.layout_noise_dim > 0:
             N, C, H, W = layout.size()
